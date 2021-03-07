@@ -1,0 +1,298 @@
+---
+title: "Sentiment Analysis of The Weeknd's Lyrics Using R's Most Popular Lexicons"
+author: "Lara Habashy"
+date: "02/03/2021"
+output: 
+  #html_document:
+  #  toc: yes
+  #  df_print: paged
+  github_document:
+    toc: yes
+--- 
+ 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Did The Weeknd Get Sadder?
+
+Since releasing three free mixtapes in 2011 that kick-started his music career and fame, Canadian musician Abel Tesfaye, known by his stage name “The Weeknd”, went on to release many more albums including 4 studio albums. He even performed at the Super Bowl this season, a gig usually awarded to the best of musicians such as Michael Jackson and Shakira. If The Weeknd only got better over the years, I wonder why I still enjoy his 2011 mixtapes better. Has The weeknd’s music changed over the past decade, or is it possible my taste in music has remained stagnant? 
+
+As an aspiring data scientist, I took it upon myself to investigate, using lyrics data, the hypothesis that The Weeknd's music has changed over the past decade. To aid in the analysis, I will use R's `tidytext` package to perform *sentiment analysis*. Sentiment analysis is usually applied in problems where we're interested in knowing how people are discussing a certain topic, specifically, how they *feel* about it. Using The Weeknd's lyrics data, we shall find a convenient way of extracting sentiment information from the lyrics and analyze the change of sentiment across time. 
+
+## The data
+
+Begin by importing the following R libraries.
+
+```{r lib, echo = T, results = 'hide', message=FALSE, warning=FALSE}
+library(tidytext)
+library(genius)
+library(pacman)
+library(tidyverse)
+library(dplyr)
+library(genius)
+library(stringr)
+library(janitor)
+```
+
+We first start by collecting the lyrics from The Weeknd's first few mixtapes and his most recent albums. Using `genius_tracklist()` from the [`genius`](https://cran.r-project.org/web/packages/genius/genius.pdf) package in R, we obtain tracklists for the albums of interest and associated URLs for each track.
+
+```{r intro}
+genius_tracklist(artist="The Weeknd", album = "After Hours")
+genius_tracklist(artist="The Weeknd", album = "House of Balloons")
+```
+
+When attempting to grab the lyrics using genius's `genius_album()`, the function fails, producing NA's for the track's that it was not successful in scraping.
+
+```{r intro1}
+genius_album(artist="The Weeknd", album = "After Hours") %>%
+  filter(is.na(lyric))
+```
+
+As such, I will only rely on the tracklists and write a function to loop over the tracklists and grab the lyrics from each, utilizing the `genius_lyrics` function. I then use the defined function to grab the lyrics from the mixtapes *House of Balloons* (2011) and *Thursday* (2011), and the albums *After Hours* (2019) and *Starboy* (2018).
+
+```{r intro2}
+#get lyrics from album
+get_lyrics <- function(Artist, Album){
+  
+  tracklist = genius_tracklist(artist=Artist, album = Album)     # genius defined function returns tracklists
+  
+  lyrics_list = NULL
+  for(song_num in 1:dim(tracklist)[1]){
+    song_length = 1
+    counter = 0     # avoid infinite loops
+    
+    while(song_length<=1 & counter<10){
+      counter = counter +1
+      (new_song = genius_lyrics(artist=Artist ,song= tracklist$track_title[song_num])) # get lyrics lines
+      Sys.sleep(1) # avoid overloading
+      song_length = dim(new_song)[1]
+    }
+    lyrics_list = rbind(lyrics_list, new_song) # join song names to lyrics
+    lyrics_list = na.omit(lyrics_list)         # remove empty lyrics lines
+  }
+  return(lyrics_list)
+}
+```
+
+
+```{r intro5, echo = T, results = 'hide'}
+# get mixtapes lyrics
+mixtape_1 <- get_lyrics(Artist = "The Weeknd", Album = "House of Balloons") %>%
+  mutate(album = "House of Balloons", type = "Mixtape")
+mixtape_2 <- get_lyrics(Artist = "The Weeknd", Album = "Thursday") %>%
+  mutate(album = "Thursdays", type = "Mixtape")
+
+# get album lyrics
+album_1 <- get_lyrics(Artist = "The Weeknd", Album = "After Hours") %>%
+  mutate(album = "After Hours", type = "Album")
+album_2 <- get_lyrics(Artist = "The Weeknd", Album = "Starboy") %>%
+  mutate(album = "Starboy", type = "Album")
+
+# merge albums and mixtapes lyrics
+albums <- rbind(album_1, album_2)
+mixtapes <- rbind(mixtape_1, mixtape_2)
+lyrics <- rbind(albums, mixtapes)
+```
+
+
+```{r intro6}
+head(lyrics)
+```
+
+## Bag of Words Representation (Mixtapes vs. Albums)
+
+To analyze the difference in lyrics, let us examine the most common words used by The Weeknd in both album categories (Albums and Mixtapes). To do this, we will utilize `tidytext`'s [`unnest_tokens()`](https://www.rdocumentation.org/packages/tidytext/versions/0.3.0/topics/unnest_tokens) with the argument token="words". Here, the tokenization process will split the songlines into individual words. For example, the line "take off my disguise" is split into the following four words: "take", "off", "my", "disguise". This representation of data is known as *bag-of-words*, a representation of text that describes the occurrence of words within a specific document. 
+
+```{r mix}
+tidy_lyrics <- lyrics %>% 
+  select(album, lyric, type)  %>%
+  unnest_tokens(output = word, input = lyric, token = "words") %>% # tokenize the whole dataset of lyrics
+  group_by(type, album) %>%
+  count(word) %>% 
+  arrange(desc(n)) %>%
+  mutate(album = as.factor(album), type = as.factor(type)) %>%    # reformatting variable types for plotting purposes
+  mutate(type = fct_relevel(type, "Mixtape"))
+
+tidy_albums <- lyrics %>% 
+  filter(type == "Album") %>%                                     # filter to keep recent music
+  select(lyric, type)  %>%
+  unnest_tokens(output = word,input = lyric, token = "words") %>% # tokenize Album lyrics 
+  group_by(type) %>%
+  count(word) %>%                                                 # count occurrences of each word
+  arrange(desc(n))                                                # sort words by decreasing order in frequency
+
+tidy_albums
+
+tidy_mixtapes <- lyrics %>% 
+  filter(type == "Mixtape") %>%                                   # filter to keep older music 
+  select(lyric, type)  %>%
+  unnest_tokens(output = word,input = lyric, token = "words") %>% # tokenize Mixtapes lyrics
+  group_by(type) %>%
+  count(word) %>%                                                 # count occurrences of each word
+  arrange(desc(n))                                                # sort words by decreasing order in frequency
+
+tidy_mixtapes
+```
+
+This representation of the lyrics seems to be a little difficult to analyze since both albums and mixtapes have many occurrences of very similar common words such as *i*, *you*, *the*, etc. To resolve this issue, we can utilize the package `tidytext` which provides a list of English *stop words*, words that do not add much meaning to a sentence such as the, a, and, or, is, etc. Then, using [anti_join](https://dplyr.tidyverse.org/reference/join.html), we can remove all stop words from both datasets of words mixtapes and albums (ie. `tidy_mixtapes` and `tidy_albums` ). 
+
+```{r stopwords}
+data(stop_words)      # load stop words from tidytext
+
+tidy_mixtapes %>% 
+  anti_join(stop_words, by = c("word" = "word")) # remove stop words from mixtapes lyrics
+
+tidy_albums %>% 
+  anti_join(stop_words, by = c("word" = "word")) # remove stop words from album lyrics
+
+tidy_lyrics <- tidy_lyrics %>% 
+  anti_join(stop_words, by = c("word" = "word")) # remove stop words from all lyrics
+```
+
+After processing the data by removing the stop words, we're able to get a better sense of the important common words used in the lyrics of the albums and mixtapes. This will help better differentiate between the two album types. 
+
+## Sentiment Analysis with *tidytext*
+
+Now that we have the lyrics represented in single words (i.e. bag-of-words representation), we can apply *lexicons* from the `tidytext` package to analyze the overall sentiment in the albums. A lexicon is a corpus (a collection of written texts) of words with an associated description of the sentiment of each word. 
+
+Let's examine three popular lexicons given by the `tidytext` package in R.
+
+1. **nrc** from Saif Mohammad and Peter Turney at the National Research Council of Canada
+2. **bing** from Bing Liu and collaborators
+3. **AFINN** from Finn Årup Nielsen
+
+The idea behind these lexicons is the assignment of **single words** to a score, to measure sentiment. The lexicons are made up of a large number of English words that are generally assigned into a positive or negative category. Some lexicons provide word associations with emotions such as anger, sadness, joy, etc.
+
+
+### The NRC Lexicon
+
+The NRC lexicon was developed by Saif Mohammad and Peter Turney at the National Research Council of Canada where I interned last summer! The lexicon provides a corpus of 13,901 words and an associated sentiment to each. It splits words into various associated sentiments. For example, take the word *abandon*. The NRC lexicon associates the following sentiments to the word abandon: fear, negative, sadness. Although most words are assigned a negative or positive sentiment, emotional sentiments such as fear, anger, trust, and sadness, are heavily present in the NRC lexicon as well!
+
+
+```{r nrc}
+tidytext::get_sentiments("nrc")
+
+tidytext::get_sentiments("nrc") %>% # get dictionary of English words by nrc 
+  group_by(sentiment) %>%         
+  count(sentiment) %>%             # count occurrences of words for each sentiment category
+  rename(count=n) %>%  
+  arrange(desc(count))             # sort in descending order by frequency of words
+```
+
+Let us visualize the proportions of nrc lexicon provided sentiments on our lyrics data.
+
+```{r nrc2}
+nrc_sentiment <- tidy_lyrics %>%
+  inner_join(get_sentiments("nrc")) %>% # only keep words that exist in nrc corpus, with associated sentiment
+  group_by(type, album) %>%
+  count(sentiment) 
+
+# proportions plot
+nrc_sentiment  %>%
+  ggplot(aes(fill=sentiment, y=n, x=album)) + 
+  geom_bar(position="fill", stat="identity") +
+  facet_wrap(~type,scales = "free") +
+  ylab("Proportion") +
+  xlab("Album Type") +
+  ggtitle("Sentiment Proportions using the NRC Lexicon", subtitle = "The Weeknd's Music")
+```
+
+Graphically speaking, it appears that The Weeknd's music got more negative and sad over time, with albums showing higher occurrences of negatively associated sentiments. 
+
+### The Bing Lexicon
+
+The second lexicon from `tidytext` is the bing lexicon. The bing lexicon, from Bing Liu and collaborators, categorizes words in binary categories of positive and negative. 
+
+```{r bing}
+tidytext::get_sentiments("bing")
+```
+
+Counting the frequency of sentiments in the corpus provided by the bing lexicon, we see that there are 4781 words labelled as negative and 2005 words labelled as positive. 
+
+```{r bing1}
+tidytext::get_sentiments("bing") %>%  # get dictionary of English words by bing 
+  group_by(sentiment) %>% 
+  count(sentiment) %>%               # count occurrences of words for each sentiment category
+  rename(count=n) %>% 
+  arrange(desc(count))               # sort in descending order by frequency of words
+```
+
+Next, we can visualize how much of each album's contents are positive and how much are negative, according to the bing lexicon.
+
+```{r bing2}
+
+bing_sentiment <- tidy_lyrics %>%
+  inner_join(get_sentiments("bing")) %>% # only keep words that exist in bing corpus, with associated sentiment
+  group_by(type, album) %>%
+  count(sentiment) %>%                  # count occurrences of words for each sentiment category
+  mutate(value = as.factor(sentiment))
+
+# proportions plot
+bing_sentiment %>%
+  ggplot(aes(fill=sentiment, y=n, x=album), color=sentiment)+ 
+  geom_bar(position="fill", stat="identity") +
+  facet_wrap(~type,scales = "free") +
+  ylab("Proportion") +
+  xlab("Album Type") +
+  ggtitle("Sentiment Proportions using the Bing Lexicon", subtitle = "The Weeknd's Music")
+```
+
+Applying the bing lexicon to the album data and visualizing the proportions of sentiments found in The Weeknd's music, it becomes more clear to see the overall difference in sentiments across the albums. His latest music, the albums *After Hours* and *Starboy* appear to contain more negative lyrics than the earlier released mixtapes from 2011.
+
+### The AFINN Lexicon
+
+The third popular lexicon is the AFINN lexicon, developed by Finn Årup Nielsen between 2009 and 2011. The AFINN lexicon assigns words with a score between -5 and 5, with negative scores indicating negative sentiment and positive scores indicating positive sentiment. No words are assigned a score of 0. The lexicon has 2,477 words, some of which overlap with the bing lexicon, and each word has a value for how positive or negative the word might be. 
+
+```{r afinn}
+tidytext::get_sentiments("afinn")
+```
+
+The AFINN lexicon has the majority of words associated with a negative score, -2 in this case.
+
+```{r afinn1}
+tidytext::get_sentiments("afinn") %>%
+  group_by(value) %>% 
+  count(value) %>%
+  rename(sentiment=value, count=n)
+```
+
+Using `inner_join` once again with the AFINN lexicon on our lyrics data, we can create a visualization of proportions for the sentiment categories -5, -4, -3, -2, -1, 1, 2, 3, 4, and 5.
+
+```{r afinn2}
+afinn_sentiment <- tidy_lyrics %>%
+  inner_join(get_sentiments("afinn")) %>% # only keep words that exist in afinn corpus, with associated sentiment
+  group_by(type, album) %>%
+  count(value) %>%                       # count frequency of words with associated sentiments for each word
+  mutate(value = as.factor(value)) %>%
+  rename(sentiment=value)
+
+# proportions plot
+afinn_sentiment %>%
+  ggplot(aes(fill=sentiment, y=n, x=album), color=sentiment)+ 
+  geom_bar(position="fill", stat="identity") +
+  facet_wrap(~type,scales = "free") +
+  ylab("Proportion") +
+  xlab("Album Type") +
+  ggtitle("Sentiment Proportions using the AFINN Lexicon", subtitle = "The Weeknd's Music")
+```
+
+Here, the AFINN lexicon is allowing us to quantify or measure words to a certain degree. Looking at the visualization above, we can see that the sentiment scores for the albums are generally more negative than the sentiment seen in the mixtapes. For instance, a huge proportion of the words in the albums *After Hours* and *Starboy* are assigned a score of -2, whereas mixtapes have more equal proportions for each sentiment. This aligns with the conclusions we derived using the other two lexicons. 
+
+## Conclusion
+
+Based on the proportions visualizations from all three lexicons from `tidytext`, it appears The Weeknd's music got more negative and sad since 2011. It is rumored that The Weeknd has been going through romantic hardships which perhaps could be the reason for his music getting sadder. Or perhaps fame is the reason? There is much more to investigate!
+
+Although we were not able to reach a definitive conclusion regarding whether there is a quantifiable significant difference in The Weeknd's albums and mixtapes, we obtained some evidence to support my initial suspicion. With grounds for further research, I will need to perform hypothesis testing to determine whether both albums and mixtapes have different sentiment distributions. Also, since the meanings of words change over time, we may consider creating our own lexicon for music applications. Stay tuned!
+
+## References 
+
+https://www.tidytextmining.com/sentiment.html
+<br> https://dplyr.tidyverse.org/reference/join.html
+<br> https://cran.r-project.org/web/packages/tidytext/vignettes/tidytext.html
+<br> https://cran.r-project.org/web/packages/genius/index.html
+<br> https://cran.r-project.org/web/packages/dplyr/vignettes/dplyr.html
+<br> https://cran.r-project.org/web/packages/ggplot2/index.html
+<br> http://corpustext.com/reference/sentiment_afinn.html 
+
+
