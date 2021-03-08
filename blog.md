@@ -109,16 +109,16 @@ genius_album(artist="The Weeknd", album = "After Hours") %>%
     ## Joining, by = c("album_name", "track_n", "track_url")
 
     ## # A tibble: 9 x 4
-    ##   track_n  line lyric track_title      
-    ##     <int> <int> <chr> <chr>            
-    ## 1       3    43 <NA>  Hardest To Love  
-    ## 2       1    NA <NA>  Alone Again      
-    ## 3       4    NA <NA>  Scared To Live   
-    ## 4       8    NA <NA>  Faith            
-    ## 5       9    NA <NA>  Blinding Lights  
-    ## 6      10    NA <NA>  In Your Eyes     
-    ## 7      11    NA <NA>  Save Your Tears  
-    ## 8      13    NA <NA>  After Hours      
+    ##   track_n  line lyric track_title                
+    ##     <int> <int> <chr> <chr>                      
+    ## 1       1    NA <NA>  Alone Again                
+    ## 2       3    NA <NA>  Hardest To Love            
+    ## 3       4    NA <NA>  Scared To Live             
+    ## 4       5    NA <NA>  Snowchild                  
+    ## 5       6    NA <NA>  Escape From LA             
+    ## 6       7    NA <NA>  Heartless                  
+    ## 7       9    NA <NA>  Blinding Lights            
+    ## 8      12    NA <NA>  Repeat After Me (Interlude)
     ## 9      14    NA <NA>  Until I Bleed Out
 
 As such, I will only rely on the tracklists and write a function to loop
@@ -246,21 +246,21 @@ tidy_mixtapes <- lyrics %>%
 tidy_mixtapes
 ```
 
-    ## # A tibble: 917 x 3
+    ## # A tibble: 910 x 3
     ## # Groups:   type [1]
     ##    type    word      n
     ##    <chr>   <chr> <int>
-    ##  1 Mixtape you     379
-    ##  2 Mixtape i       272
+    ##  1 Mixtape you     373
+    ##  2 Mixtape i       267
     ##  3 Mixtape the     194
-    ##  4 Mixtape it      143
+    ##  4 Mixtape it      142
     ##  5 Mixtape me      137
     ##  6 Mixtape a       107
-    ##  7 Mixtape i'm     100
-    ##  8 Mixtape baby     95
-    ##  9 Mixtape girl     91
-    ## 10 Mixtape oh       88
-    ## # … with 907 more rows
+    ##  7 Mixtape i'm      98
+    ##  8 Mixtape baby     88
+    ##  9 Mixtape girl     86
+    ## 10 Mixtape got      83
+    ## # … with 900 more rows
 
 This representation of the lyrics seems to be a little difficult to
 analyze since both albums and mixtapes have many occurrences of very
@@ -279,21 +279,21 @@ tidy_mixtapes %>%
   anti_join(stop_words, by = c("word" = "word")) # remove stop words from mixtapes lyrics
 ```
 
-    ## # A tibble: 649 x 3
+    ## # A tibble: 643 x 3
     ## # Groups:   type [1]
-    ##    type    word         n
-    ##    <chr>   <chr>    <int>
-    ##  1 Mixtape baby        95
-    ##  2 Mixtape girl        91
-    ##  3 Mixtape la          80
-    ##  4 Mixtape yeah        78
-    ##  5 Mixtape ooh         77
-    ##  6 Mixtape love        56
-    ##  7 Mixtape thursday    38
-    ##  8 Mixtape woah        38
-    ##  9 Mixtape bring       34
-    ## 10 Mixtape money       28
-    ## # … with 639 more rows
+    ##    type    word      n
+    ##    <chr>   <chr> <int>
+    ##  1 Mixtape baby     88
+    ##  2 Mixtape girl     86
+    ##  3 Mixtape la       80
+    ##  4 Mixtape ooh      69
+    ##  5 Mixtape yeah     62
+    ##  6 Mixtape love     55
+    ##  7 Mixtape bring    34
+    ##  8 Mixtape woah     34
+    ##  9 Mixtape money    28
+    ## 10 Mixtape fun      27
+    ## # … with 633 more rows
 
 ``` r
 tidy_albums %>% 
